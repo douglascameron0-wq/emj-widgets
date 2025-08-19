@@ -1,0 +1,59 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Events Moose Jaw - Highlights</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 2rem; }
+    h2 { margin-bottom: 1rem; color: #ff7f50; }
+    .highlights { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+    .card h3 { margin: 0 0 0.5rem; color: #f8fafc; }
+    .card p { margin: 0.25rem 0; color: #cbd5e1; }
+    .ribbon { font-size: 0.8rem; color: #ff7f50; font-weight: bold; }
+    a { color: #38bdf8; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <h2>Moose Jaw Highlights</h2>
+  <div id="highlights" class="highlights">Loading highlights...</div>
+
+  <script>
+    async function loadHighlights() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const csvUrl = urlParams.get("csv") || "https://docs.google.com/spreadsheets/d/e/2PACX-1vR0N9M2sACtG-R3_j6SQoZQkxgrjWDHWYVAVrL7mKaXliu_SxrMOwcg8giDTX5l-4zO1k2H2B2Btxsd/pub?gid=1511064584&single=true&output=csv";
+      
+      const res = await fetch(csvUrl);
+      const text = await res.text();
+      const rows = text.split("\n").map(r => r.split(","));
+      const headers = rows.shift().map(h => h.trim());
+
+      const container = document.getElementById("highlights");
+      container.innerHTML = "";
+
+      rows.forEach(cols => {
+        if (cols.length < headers.length) return;
+        const item = {};
+        headers.forEach((h, i) => { item[h] = cols[i]; });
+
+        if (item.visible && item.visible.toLowerCase().includes("yes")) {
+          const card = document.createElement("div");
+          card.className = "card";
+          card.innerHTML = `
+            <div class="ribbon">${item.ribbon || ""}</div>
+            <h3>${item.title || ""}</h3>
+            <p><strong>${item.subtitle || ""}</strong></p>
+            <p>${item.desc || ""}</p>
+            ${item.primary_url ? `<p><a href="${item.primary_url}" target="_blank">${item.primary_text || "More Info"}</a></p>` : ""}
+          `;
+          container.appendChild(card);
+        }
+      });
+    }
+    loadHighlights();
+  </script>
+</body>
+</html>
