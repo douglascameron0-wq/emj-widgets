@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Moose Jaw Highlights</title>
+  <style>
+  /* --- Container --- */
+  .emj-container {
+    background: #0f172a; /* dark navy background */
+    border-radius: 10px;
+    padding: 20px;
+    max-width: 1000px;
+    margin: auto;
+  }
+
+  /* --- Title --- */
+  .emj-title {
+    color: #ff7f50;
+    font-weight: 700;
+    margin-bottom: 12px;
+    text-align: center;
+    font-size: 1.5rem;
+  }
+
+  /* --- Card layout --- */
+  .emj-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+  }
+
+  .emj-card {
+    background: #fff;
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  .emj-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+  }
+
+  /* --- Card title --- */
+  .emj-card h3 {
+    margin: 0 0 6px 0;
+    font-size: 1.05rem;
+    color: #c2410c; /* warm accent */
+  }
+
+  /* --- Card description --- */
+  .emj-card p {
+    font-size: 0.9rem;
+    color: #475569;
+    margin: 0 0 12px 0;
+    flex-grow: 1;
+  }
+
+  /* --- Tags --- */
+  .emj-tags {
+    margin-top: 6px;
+  }
+
+  .emj-tag {
+    display: inline-block;
+    background: #f1f5f9;
+    color: #334155;
+    border-radius: 12px;
+    padding: 2px 8px;
+    font-size: 0.75rem;
+    margin: 2px;
+    transition: background 0.2s ease, color 0.2s ease;
+  }
+
+  .emj-tag:hover {
+    background: #ff7f50;
+    color: #fff;
+  }
+
+  /* --- Buttons --- */
+  .emj-buttons {
+    margin-top: 12px;
+  }
+
+  .emj-button {
+    display: inline-block;
+    background: #ff7f50;
+    color: #fff;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-decoration: none;
+    margin-right: 6px;
+    transition: background 0.2s ease;
+  }
+
+  .emj-button:hover {
+    background: #e56f45;
+  }
+  </style>
+</head>
+<body>
+  <div class="emj-container">
+    <h2 class="emj-title">Moose Jaw Highlights</h2>
+    <div id="emj-grid" class="emj-grid"></div>
+  </div>
+
+  <script>
+  async function loadHighlights() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const src = urlParams.get("src") || "https://docs.google.com/spreadsheets/d/e/2PACX-1vR0N9M2sACtG-R3_j6SQoZQkxgrjWDHWYVAVrL7mKaXliu_SxrMOwcg8giDTX5l-4zO1k2H2B2Btxsd/pub?gid=1511064584&single=true&output=csv";
+
+    const res = await fetch(src);
+    const text = await res.text();
+
+    const rows = text.split("\n").map(r => r.split(","));
+    const headers = rows.shift();
+
+    const grid = document.getElementById("emj-grid");
+
+    rows.forEach(row => {
+      const data = {};
+      headers.forEach((h, i) => data[h.trim()] = row[i] ? row[i].trim() : "");
+
+      if (!data.visible || data.visible.toLowerCase() !== "true") return;
+
+      const card = document.createElement("div");
+      card.className = "emj-card";
+
+      let buttonsHTML = "";
+      if (data.primary_text && data.primary_url) {
+        buttonsHTML += `<a href="${data.primary_url}" target="_blank" class="emj-button">${data.primary_text}</a>`;
+      }
+      if (data.secondary_text && data.secondary_url) {
+        buttonsHTML += `<a href="${data.secondary_url}" target="_blank" class="emj-button">${data.secondary_text}</a>`;
+      }
+
+      card.innerHTML = `
+        <h3>${data.title || "Untitled"}</h3>
+        <p>${data.desc || ""}</p>
+        <div class="emj-tags">
+          ${(data.tags || "").split("|").map(t => t.trim()).filter(Boolean).map(t => `<span class="emj-tag">${t}</span>`).join("")}
+        </div>
+        ${buttonsHTML ? `<div class="emj-buttons">${buttonsHTML}</div>` : ""}
+      `;
+
+      grid.appendChild(card);
+    });
+  }
+
+  loadHighlights();
+  </script>
+</body>
+</html>
