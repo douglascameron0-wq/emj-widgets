@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>EMJ Highlights (Optimized)</title>
+<style>
+  :root{
+    --bg:#0f172a;           /* dark panel */
+    --ink:#f8fafc;          /* panel text */
+    --card:#ffffff;         /* card bg */
+    --border:#e2e8f0;       /* card border */
+    --muted:#475569;        /* body text */
+    --accent:#ff7f50;       /* headings / buttons */
+    --gap:16px;             /* grid gap (can override via ?gap=) */
+    --maxw:1100px;          /* max width (override via ?maxw=) */
+    --radius:12px;
+    --shadow:0 2px 6px rgba(2,6,23,.12);
+    --shadow-hover:0 8px 24px rgba(2,6,23,.18);
+    --pad:16px;             /* inner padding */
+  }
+  body{margin:0;background:#f5f7fb;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  section[aria-label="Moose Jaw Highlights"]{
+    background:var(--bg); color:var(--ink);
+    border-radius:14px; margin:18px; padding:12px;
+  }
+  .wrap{max-width:var(--maxw); margin:0 auto; padding:8px 10px 14px;}
+  .title{font-weight:800; color:var(--accent); margin:8px 4px 10px; font-size:1.05rem;}
+  .grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:var(--gap);}
+  /* Card */
+  .card{ position:relative; background:var(--card); border:1px solid var(--border);
+         border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; transition:transform .18s ease, box-shadow .18s ease; }
+  .card:hover{ transform:translateY(-2px); box-shadow:var(--shadow-hover); }
+  .card a.cardlink{ position:absolute; inset:0; z-index:1; border-radius:inherit; }
+  .pad{ padding:var(--pad); position:relative; z-index:2; }
+  .h{ font-size:0.98rem; font-weight:800; color:var(--accent); margin:0 0 6px; }
+  .desc{ font-size:0.9rem; color:var(--muted); margin:0; display:-webkit-box; -webkit-line-clamp:2; line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  /* badges row hidden for now but ready */
+  .meta{ display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+  .badge{ font-size:.72rem; border:1px dashed var(--border); color:#64748b; padding:4px 8px; border-radius:999px; }
+  @media (max-width:640px){
+    :root{ --gap:14px; }
+    .wrap{ padding:8px 8px 14px;}
+  }
+</style>
+</head>
+<body>
+<section aria-label="Moose Jaw Highlights">
+  <div class="wrap">
+    <div class="title">Moose Jaw Highlights</div>
+    <div class="grid" id="emj-grid">
+      <!-- Sample static cards (keep or replace with CSV-driven version later) -->
+      <div class="card">
+        <a class="cardlink" href="https://www.discovermoosejaw.com/mac-the-moose" target="_blank" rel="noopener"></a>
+        <div class="pad">
+          <h3 class="h">Mac the Moose</h3>
+          <p class="desc">World’s tallest moose statue — the classic Moose Jaw selfie stop.</p>
+        </div>
+      </div>
+      <div class="card">
+        <a class="cardlink" href="https://www.tunnelsofmoosejaw.com/" target="_blank" rel="noopener"></a>
+        <div class="pad">
+          <h3 class="h">Tunnels of Moose Jaw</h3>
+          <p class="desc">Theatrical underground tours: Prohibition, Passage to Fortune, Bunker 24.</p>
+        </div>
+      </div>
+      <div class="card">
+        <a class="cardlink" href="https://templegardens.ca/" target="_blank" rel="noopener"></a>
+        <div class="pad">
+          <h3 class="h">Temple Gardens Mineral Spa</h3>
+          <p class="desc">Soak in Canada’s largest geothermal mineral pool. Skywalk to the Casino.</p>
+        </div>
+      </div>
+      <div class="card">
+        <a class="cardlink" href="https://casinomoosejaw.com/" target="_blank" rel="noopener"></a>
+        <div class="pad">
+          <h3 class="h">Casino Moose Jaw</h3>
+          <p class="desc">Art‑deco vibe, dining &amp; games — connected to the spa via skybridge.</p>
+        </div>
+      </div>
+      <div class="card">
+        <a class="cardlink" href="https://wakamow.ca/" target="_blank" rel="noopener"></a>
+        <div class="pad">
+          <h3 class="h">Wakamow Valley</h3>
+          <p class="desc">Trails, bridges, paddling, picnics — 500+ acres of river nature.</p>
+        </div>
+      </div>
+      <div class="card">
+        <a class="cardlink" href="https://wdm.ca/moose-jaw/" target="_blank" rel="noopener"></a>
+        <div class="pad">
+          <h3 class="h">Western Development Museum</h3>
+          <p class="desc">Transportation &amp; prairie history; mini steam train outside in season.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  // Optional: allow ?gap= and ?maxw= to tweak layout from iframe URL
+  (function applyParams(){
+    const q = new URLSearchParams(location.search);
+    const gap = q.get('gap'); const maxw = q.get('maxw');
+    const root = document.documentElement;
+    if(gap) root.style.setProperty('--gap', parseInt(gap,10)+'px');
+    if(maxw) root.style.setProperty('--maxw', maxw.endsWith('px')||maxw.endsWith('%')?maxw: (parseInt(maxw,10)+'px'));
+  })();
+
+  // Auto-resize: observe content height and post to parent
+  (function autoresize(){
+    function postHeight(){
+      const h = document.documentElement.scrollHeight;
+      parent.postMessage({ type:'resize', height:h }, '*');
+    }
+    // Post on load
+    window.addEventListener('load', postHeight);
+    // Observe mutations and resize changes
+    const ro = new ResizeObserver(postHeight);
+    ro.observe(document.body);
+    // Fallback interval (in case older browsers)
+    setInterval(postHeight, 1000);
+  })();
+</script>
+</body>
+</html>
