@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Moose Jaw Businesses</title>
+<style>
+body {font-family: system-ui, sans-serif; margin:0; background:#f8fafc; color:#0f172a;}
+.mj-band {background: linear-gradient(180deg,#1e293b 0%,#334155 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 4px 16px rgba(0,0,0,.15); width:100%; border-radius:14px; margin:20px auto; max-width:1280px;}
+.mj-inner {padding:20px clamp(14px,3vw,28px) 24px;}
+.mj-title {margin:0 0 6px; font-size:1.28rem; font-weight:700; letter-spacing:-0.01em; color:#fff;}
+.mj-accent {width:44px; height:3px; background:#ff7f50; border-radius:999px; margin:4px 0 12px;}
+.grid {display:grid; gap:10px; grid-template-columns: repeat(auto-fit,minmax(230px,1fr));}
+.card {background:#fff; border:1px solid #e2e8f0; border-left:4px solid #ff7f50; border-radius:10px; padding:10px 12px; box-shadow:0 4px 12px rgba(0,0,0,.08);}
+.card a {color:#0f172a; font-weight:700; text-decoration:none;}
+.card a:hover {color:#ff7f50;}
+.desc {margin:4px 0 0; color:#475569; font-size:.9rem; line-height:1.35;}
+.sm {margin-top:6px;}
+.sm a {margin-right:6px; font-size:.85rem; color:#475569;}
+.sm a:hover {color:#ff7f50;}
+.phone {font-size:.85rem; color:#334155; margin-top:4px;}
+.featured {border-left:4px solid #0ea5e9;}
+@media(max-width:640px){.mj-inner{padding:18px 16px 20px;} .grid{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<section class="mj-band">
+<div class="mj-inner">
+<h2 class="mj-title">Local Businesses</h2>
+<div class="mj-accent"></div>
+<div id="biz-grid" class="grid">Loading businesses...</div>
+</div>
+</section>
+
+<script>
+async function loadCSV(url){
+  const res = await fetch(url);
+  const text = await res.text();
+  return text.split(/\r?\n/).map(r=>r.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(c=>c.replace(/^"|"$/g,'')));
+}
+
+function norm(s){return String(s||'').trim().toLowerCase();}
+
+(async()=>{
+ try{
+   const urlParams=new URLSearchParams(window.location.search);
+   const csv=urlParams.get("src")||"https://docs.google.com/spreadsheets/d/e/2PACX-1vR0N9M2sACtG-R3_j6SQoZQkxgrjWDHWYVAVrL7mKaXliu_SxrMOwcg8giDTX5l-4zO1k2H2B2Btxsd/pub?gid=659667274&single=true&output=csv";
+   const rows=await loadCSV(csv);
+   if(!rows.length) throw new Error("Empty CSV");
+   const headers=rows.shift();
+   console.log("CSV headers:", headers);
+
+   const clean = s => norm(String(s).replace(/\u00A0/g,''));
+   const m={}; headers.forEach((h,i)=> m[clean(h)]=i);
+   function softFind(word){
+     const w=norm(word).replace(/[^a-z]/g,'');
+     for(let i=0;i<headers.length;i++){
+       const h=clean(headers[i]).replace(/[^a-z]/g,'');
+       if(h===w||h.includes(w)) return i;
+     }
+     return -1;
+   }
+
+   let iName=m[clean("Name")]; if(iName==null||iName<0) iName=softFind("Name");
+   let iLoc=m[clean("Location")]; if(iLoc==null||iLoc<0) iLoc=softFind("Location");
+   let iHrs=m[clean("Hours")]; if(iHrs==null||iHrs<0) iHrs=softFind("Hours");
+   let iWeb=m[clean("Website")]; if(iWeb==null||iWeb<0) iWeb=softFind("Website");
+   let iFB=m[clean("Facebook")]; if(iFB==null||iFB<0) iFB=softFind("Facebook");
+   let iIG=m[clean("Instagram")]; if(iIG==null||iIG<0) iIG=softFind("Instagram");
+   let iCat=m[clean("Category")]; if(iCat==null||iCat<0) iCat=softFind("Category");
+   let iDesc=m[clean("Description")]; if(iDesc==null||iDesc<0) iDesc=softFind("Description");
+   let iPh=m[clean("Phone Number")]; if(iPh==null||iPh<0) iPh=softFind("Phone Number");
+   let iFeat=m[clean("Featured")] ?? m[clean("Featured (Yes/No)")]; if(iFeat==null||iFeat<0) iFeat=softFind("Featured");
+
+   if(iName==null||iName<0) iName=0; // fallback
+
+   const grid=document.getElementById("biz-grid");
+   grid.innerHTML="";
+   rows.forEach(r=>{
+     const name=r[iName]; if(!name) return;
+     const loc=r[iLoc]||""; const hrs=r[iHrs]||""; const web=r[iWeb]||"";
+     const fb=r[iFB]||""; const ig=r[iIG]||""; const cat=r[iCat]||"";
+     const desc=r[iDesc]||""; const ph=r[iPh]||""; const feat=(r[iFeat]||"").toLowerCase().startsWith("y");
+
+     const card=document.createElement("div");
+     card.className="card"+(feat?" featured":"");
+     let html="";
+     if(web) html+=`<a href="${web}" target="_blank" rel="noopener">${name}</a>`;
+     else html+=`<strong>${name}</strong>`;
+     if(cat) html+=`<div class="desc"><em>${cat}</em></div>`;
+     if(desc) html+=`<div class="desc">${desc}</div>`;
+     if(loc) html+=`<div class="desc">${loc}</div>`;
+     if(hrs) html+=`<div class="desc">${hrs}</div>`;
+     if(ph) html+=`<div class="phone">${ph}</div>`;
+     if(fb||ig){
+       html+=`<div class="sm">`;
+       if(fb) html+=`<a href="${fb}" target="_blank">Facebook</a>`;
+       if(ig) html+=`<a href="${ig}" target="_blank">Instagram</a>`;
+       html+=`</div>`;
+     }
+     card.innerHTML=html;
+     grid.appendChild(card);
+   });
+ }catch(e){document.getElementById("biz-grid").innerHTML="Error: "+e.message; console.error(e);}
+})();
+</script>
+</body>
+</html>
