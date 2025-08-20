@@ -1,213 +1,160 @@
-<!-- emj-businesses.html -->
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
+<meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Local Businesses — Events Moose Jaw</title>
+<title>EMJ Businesses</title>
 <style>
-  :root{
-    --accent:#ff7f50;
-    --ink:#0f172a;
-    --muted:#475569;
-    --chip-bg:#fff1eb;
-    --chip-border:#ffd8c8;
-    --chip-ink:#b45309;
-    --card:#fff;
-    --card-border:#e2e8f0;
+  :root {
+    --card-border:#e2e8f0; --ink:#0f172a; --muted:#64748b; --ink-2:#475569;
+    --chip-bg:#f1f5f9; --accent:#ff7f50; --shadow:0 4px 12px rgba(0,0,0,.08);
   }
-  html,body{margin:0;padding:12px;background:#f8fafc;color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif}
-  .toolbar{display:grid;grid-template-columns:1fr;gap:10px;margin:0 0 12px}
-  .search{width:100%;padding:10px 12px;border:1px solid var(--card-border);border-radius:10px;outline:none;box-sizing:border-box}
-  .search:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(255,127,80,.20)}
-  .chips{display:flex;flex-wrap:wrap;gap:.6rem;margin:0 0 10px}
-  .chip{background:var(--chip-bg);border:1px solid var(--chip-border);color:var(--chip-ink);border-radius:999px;box-shadow:none;font-weight:700;padding:.5rem .9rem;display:inline-flex;align-items:center;gap:.4rem;cursor:pointer;user-select:none}
-  .chip.active{background:var(--accent);border-color:var(--accent);color:#fff}
-  .grid{display:grid;gap:12px}
-  .card{background:var(--card);border:1px solid var(--card-border);border-left:4px solid var(--accent);border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,.06);padding:12px 14px}
-  .title{margin:0 0 6px;font-size:1.05rem;font-weight:800}
-  .title a{color:var(--ink);text-decoration:none}
-  .title a:hover{color:var(--accent);text-decoration:underline}
-  .meta{margin:0 0 6px;font-size:.9rem;color:var(--muted)}
-  .desc{margin:0;font-size:.95rem;line-height:1.4;color:#243040}
-  .pill{display:inline-block;margin-top:6px;padding:2px 8px;font-size:.75rem;border-radius:999px;background:#fff1eb;border:1px solid #ffd8c8;color:#b45309}
-  .empty{border-left-color:#e2e8f0}
+  html,body{margin:0;padding:0;background:transparent;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;color:var(--ink);}
+  .wrap{padding:0 0 4px;}
+  .grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));}
+  .card{
+    background:#fff;border:1px solid var(--card-border);border-left:4px solid var(--accent);
+    border-radius:10px;padding:10px 12px;box-shadow:var(--shadow);
+  }
+  .head{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+  .title{margin:0;font-size:1rem;line-height:1.2;}
+  .title a{color:var(--ink);text-decoration:none;font-weight:700;}
+  .title a:hover{color:var(--accent);}
+  .badge{background:var(--accent);color:#fff;font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap;}
+  .meta{color:var(--muted);font-size:.82rem;margin:.25rem 0 0;}
+  .desc{margin:.5rem 0 0;color:var(--ink-2);font-size:.9rem;line-height:1.35;}
+  .chip{display:inline-block;background:#f1f5f9;color:#334155;border:1px solid var(--card-border);
+        font-size:.72rem;padding:2px 6px;border-radius:999px;margin-top:6px;}
+  .links{margin-top:8px;}
+  .btn{
+    display:inline-block;margin-right:8px;padding:4px 10px;font-size:.85rem;
+    background:#f1f5f9;border-radius:6px;text-decoration:none;color:var(--ink);
+  }
+  .btn:hover{background:#e2e8f0;}
+  .status{color:#334155;font-size:.9rem;padding:6px 2px;}
 </style>
 </head>
 <body>
-  <div class="toolbar">
-    <input id="biz-search" class="search" type="search" placeholder="Search businesses…" aria-label="Search businesses" />
-    <div id="biz-chips" class="chips" role="toolbar" aria-label="Filter by category"></div>
-  </div>
-  <div id="biz-list" class="grid" role="list"></div>
+<div class="wrap">
+  <div id="status" class="status">Loading…</div>
+  <div id="grid" class="grid" hidden></div>
+</div>
 
 <script>
 (function(){
-  // ---- Helpers --------------------------------------------------------
-  function qs(s,el){return (el||document).querySelector(s)}
-  function qsa(s,el){return Array.from((el||document).querySelectorAll(s))}
-  function getParam(name){return new URLSearchParams(location.search).get(name)}
+  const params = new URLSearchParams(location.search);
+  const SRC = params.get("src");
 
-  // robust-enough CSV parser (handles quotes + commas within quotes)
   function parseCSV(text){
-    const rows=[]; let cur="", inQ=false, row=[];
-    function pushCell(){ row.push(cur.replace(/^"|"$/g,"")); cur=""; }
-    function pushRow(){ rows.push(row.map(c=>c.trim())); row=[]; }
-
+    const rows=[]; let row=[], cell='', q=false;
     for(let i=0;i<text.length;i++){
       const c=text[i], n=text[i+1];
-      if(c==='"'){
-        if(inQ && n==='"'){ cur+='"'; i++; }
-        else inQ=!inQ;
-      } else if(c===',' && !inQ){
-        pushCell();
-      } else if((c==='\n' || c==='\r') && !inQ){
-        if(c==='\r' && n==='\n'){ i++; } // CRLF
-        pushCell(); pushRow();
+      if(q){
+        if(c=='"' && n=='"'){ cell+='"'; i++; }
+        else if(c=='"'){ q=false; }
+        else { cell+=c; }
       } else {
-        cur+=c;
+        if(c=='"'){ q=true; }
+        else if(c==','){ row.push(cell); cell=''; }
+        else if(c=='\n'){ row.push(cell); rows.push(row); row=[]; cell=''; }
+        else if(c=='\r'){ }
+        else { cell+=c; }
       }
     }
-    if(cur.length || row.length){ pushCell(); pushRow(); }
-    return rows.filter(r=>r.length && r.some(x=>x!==""));
+    if(cell.length || row.length){ row.push(cell); rows.push(row); }
+    return rows;
   }
+  const norm = s => (s||'').toLowerCase().replace(/\s+/g,' ').trim();
 
-  function postHeight(){
-    const h=Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
-    try{ window.parent.postMessage({type:'emjBIZ', h}, '*'); }catch(e){}
-  }
+  async function go(){
+    const status = document.getElementById('status');
+    const grid = document.getElementById('grid');
 
-  // ---- Rendering ------------------------------------------------------
-  const state = {
-    all: [],
-    filtered: [],
-    activeCat: 'All',
-    query: ''
-  };
+    if(!SRC){ status.textContent = "Missing ?src=CSV_URL"; ping(); return; }
 
-  function uniqueCats(rows){
-    const set=new Set();
-    rows.forEach(r => { const cat=(r[4]||"").trim(); if(cat) set.add(cat); });
-    return Array.from(set).sort((a,b)=>a.localeCompare(b));
-  }
-
-  function renderChips(cats){
-    const wrap=qs('#biz-chips');
-    wrap.innerHTML='';
-    const mk = (label, active=false)=>{
-      const b=document.createElement('button');
-      b.className='chip'+(active?' active':'');
-      b.type='button'; b.textContent=label;
-      b.setAttribute('data-cat',label);
-      wrap.appendChild(b);
-      return b;
-    };
-    mk('All', true);
-    cats.forEach(c=>mk(c, false));
-
-    wrap.addEventListener('click', (ev)=>{
-      const chip = ev.target.closest('.chip'); if(!chip) return;
-      state.activeCat = chip.getAttribute('data-cat') || 'All';
-      qsa('.chip', wrap).forEach(el=>el.classList.toggle('active', el===chip));
-      applyFilters();
-    }, { once:false });
-  }
-
-  function cardHTML(row){
-    const [name, location, hours, website, category, desc] = row;
-    const safeName = (name||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-    const safeLoc  = (location||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-    const safeDesc = (desc||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-    const metaBits = [safeLoc, (hours||'').trim()].filter(Boolean).join(' • ');
-    const nameHtml = website && website.trim()
-      ? `<a href="${website}" target="_blank" rel="noopener">${safeName}</a>`
-      : `<span>${safeName}</span>`;
-    return `
-      <article class="card" role="listitem">
-        <h3 class="title">${nameHtml}</h3>
-        ${metaBits ? `<p class="meta">${metaBits}</p>` : ``}
-        ${safeDesc ? `<p class="desc">${safeDesc}</p>` : ``}
-        ${category ? `<span class="pill">${category}</span>` : ``}
-      </article>
-    `;
-  }
-
-  function applyFilters(){
-    const q = state.query.toLowerCase();
-    const cat = state.activeCat;
-    state.filtered = state.all.filter((row, i)=>{
-      if(i===0) return false; // skip header
-      const [name, location, hours, website, category, desc] = row;
-      const catOK = (cat==='All') || (String(category||'').trim()===cat);
-      if(!catOK) return false;
-      if(!q) return true;
-      const blob = [name,location,category,desc].map(x=>String(x||'').toLowerCase()).join(' ');
-      return blob.indexOf(q) !== -1;
-    });
-    renderList();
-  }
-
-  function renderList(){
-    const list=qs('#biz-list');
-    if(!state.filtered.length){
-      list.innerHTML = `<div class="card empty"><p class="meta">No businesses match your filters.</p></div>`;
-    } else {
-      list.innerHTML = state.filtered.map(cardHTML).join('');
-    }
-    requestAnimationFrame(postHeight);
-  }
-
-  // ---- Init -----------------------------------------------------------
-  async function init(){
-    const csv = getParam('csv');
-    if(!csv){
-      qs('#biz-list').innerHTML = `<div class="card empty"><p class="meta">CSV source not provided.</p></div>`;
-      postHeight(); return;
-    }
     try{
-      const res = await fetch(csv + (csv.includes('?') ? '&' : '?') + 't=' + Date.now(), { cache:'no-store' });
-      const txt = await res.text();
-      const rows = parseCSV(txt);
+      const res = await fetch(SRC, {cache:"no-store", referrerPolicy:"no-referrer"});
+      if(!res.ok) throw new Error("HTTP " + res.status);
+      const text = await res.text();
+      let rows = parseCSV(text);
+      if(!rows.length) throw new Error("Empty CSV");
+      if(rows[0] && rows[0][0]) rows[0][0] = rows[0][0].replace(/^\uFEFF/, "");
 
-      // Validate header shape
-      const header = rows[0] || [];
-      // Expect: Name, Location, Hours, Website, Category, Description
-      if(header.length < 6){
-        qs('#biz-list').innerHTML = `<div class="card empty"><p class="meta">Unexpected CSV format. Expect 6 columns: Name, Location, Hours, Website, Category, Description.</p></div>`;
-        postHeight(); return;
-      }
+      const headers = rows.shift();
+      const m = {}; headers.forEach((h,i)=> m[norm(h)] = i);
 
-      state.all = rows;
-      const cats = uniqueCats(rows.slice(1));
-      renderChips(cats);
-      renderList();
+      const iName = m[norm("Name")];
+      const iLoc  = m[norm("Location")];
+      const iHrs  = m[norm("Hours")];
+      const iWeb  = m[norm("Website")];
+      const iFB   = m[norm("Facebook")];
+      const iIG   = m[norm("Instagram")];
+      const iCat  = m[norm("Category")];
+      const iDesc = m[norm("Description")];
+      const iPh   = m[norm("Phone Number")];
+      const iFeat = m[norm("Featured")] ?? m[norm("Featured (Yes/No)")];
 
-      // Search wiring
-      const search = qs('#biz-search');
-      if(search){
-        search.addEventListener('input', function(){
-          state.query = this.value || '';
-          applyFilters();
-        });
-      }
+      if(iName == null || iName < 0) throw new Error("Missing 'Name' column");
 
-      // First pass (All + empty query)
-      state.activeCat = 'All';
-      state.query = '';
-      applyFilters();
+      let data = rows
+        .filter(r => r && r.length && r[iName] && r[iName].trim().length)
+        .map(r => ({
+          name:(r[iName]||"").trim(),
+          loc:(r[iLoc]||"").trim(),
+          hrs:(r[iHrs]||"").trim(),
+          web:(r[iWeb]||"").trim(),
+          fb:(r[iFB]||"").trim(),
+          ig:(r[iIG]||"").trim(),
+          cat:(r[iCat]||"").trim(),
+          desc:(r[iDesc]||"").trim(),
+          ph:(r[iPh]||"").trim(),
+          feat:(iFeat!=null && iFeat>=0) ? ((r[iFeat]||"").toLowerCase().trim()==="yes") : false
+        }));
 
-      // settle height after fonts/images (if any)
-      window.addEventListener('load', postHeight);
-      if(document.fonts && document.fonts.ready){ document.fonts.ready.then(postHeight); }
-      setTimeout(postHeight, 300);
-    }catch(err){
-      console.error('Businesses CSV load error:', err);
-      qs('#biz-list').innerHTML = `<div class="card empty"><p class="meta">Could not load businesses. Check the CSV link.</p></div>`;
-      postHeight();
+      data.sort((a,b)=>(b.feat===a.feat)?0:(b.feat?1:-1)).reverse();
+
+      if(!data.length){ status.textContent = "No rows found."; ping(); return; }
+
+      grid.innerHTML = data.map(b=>{
+        const title = b.web ? `<a href="${b.web}" target="_blank" rel="noopener">${b.name}</a>` : b.name;
+        const meta = [b.loc,b.hrs].filter(Boolean).join(" • ");
+        const call = b.ph ? `<a href="tel:${b.ph.replace(/\D/g,'')}" class="btn">📞 Call</a>` : "";
+        const fb   = b.fb ? `<a href="${b.fb}" target="_blank" rel="noopener" class="btn">Facebook</a>` : "";
+        const ig   = b.ig ? `<a href="${b.ig}" target="_blank" rel="noopener" class="btn">Instagram</a>` : "";
+        const chip = b.cat ? `<span class="chip">${b.cat}</span>` : "";
+        const badge= b.feat ? `<span class="badge">★ Featured</span>` : "";
+        return `
+          <div class="card">
+            <div class="head">
+              <h3 class="title">${title}</h3>
+              ${badge}
+            </div>
+            ${meta ? `<div class="meta">${meta}</div>` : ``}
+            ${b.desc ? `<p class="desc">${b.desc}</p>` : ``}
+            ${chip}
+            <div class="links">${call}${fb}${ig}</div>
+          </div>
+        `;
+      }).join("");
+
+      status.remove();
+      grid.hidden = false;
+      ping();
+    } catch(err){
+      const status = document.getElementById('status');
+      status.textContent = "Error: " + err.message;
+      ping();
     }
   }
 
-  init();
+  function ping(){
+    const h = document.documentElement.scrollHeight || document.body.scrollHeight;
+    parent.postMessage({ type:"emjH", h }, "*");
+    setTimeout(()=> parent.postMessage({type:"emjH", h:document.documentElement.scrollHeight}, "*"), 200);
+    setTimeout(()=> parent.postMessage({type:"emjH", h:document.documentElement.scrollHeight}, "*"), 800);
+  }
+
+  window.addEventListener("load", go);
 })();
 </script>
 </body>
