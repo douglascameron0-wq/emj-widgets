@@ -1,0 +1,159 @@
+<!-- emj-businesses.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Local Businesses – Events Moose Jaw</title>
+<style>
+  body {
+    font-family: system-ui, sans-serif;
+    margin: 0; padding: 12px;
+    background: #f8fafc;
+    color: #0f172a;
+  }
+  .biz-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0 0 12px;
+  }
+  .biz-filter {
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+  .biz-filter.active {
+    background: #ff7f50;
+    color: #fff;
+    border-color: #ff7f50;
+  }
+  .biz-list {
+    display: grid;
+    gap: 12px;
+  }
+  .biz-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-left: 4px solid #ff7f50;
+    border-radius: 10px;
+    padding: 12px 14px;
+    box-shadow: 0 4px 12px rgba(0,0,0,.06);
+  }
+  .biz-title {
+    margin: 0 0 4px;
+    font-size: 1.05rem;
+    font-weight: 700;
+  }
+  .biz-title a { color: #0f172a; text-decoration: none; }
+  .biz-title a:hover { color: #ff7f50; }
+  .biz-meta {
+    margin: 0 0 6px;
+    font-size: 0.85rem;
+    color: #475569;
+  }
+  .biz-desc {
+    margin: 0 0 6px;
+    font-size: 0.9rem;
+    line-height: 1.35;
+  }
+  .biz-cat {
+    display: inline-block;
+    font-size: 0.75rem;
+    background: #fff1eb;
+    border: 1px solid #ffd8c8;
+    color: #b45309;
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+</style>
+</head>
+<body>
+<div class="biz-filters" id="biz-filters"></div>
+<div class="biz-list" id="biz-list"></div>
+
+<script>
+async function loadCSV(url) {
+  const res = await fetch(url);
+  const text = await res.text();
+  return text.trim().split("\n").map(r => r.split(","));
+}
+
+function postHeight() {
+  const h = document.body.scrollHeight;
+  parent.postMessage({type: "emjBIZ", h}, "*");
+}
+
+function render(data, filterCat = null) {
+  const list = document.getElementById("biz-list");
+  list.innerHTML = "";
+
+  data.forEach((row, i) => {
+    if (i === 0) return; // skip header
+    const [name, location, hours, website, category, desc] = row;
+
+    if (filterCat && category.trim() !== filterCat) return;
+
+    const nameHtml = website && website.trim()
+      ? `<a href="${website}" target="_blank" rel="noopener">${name}</a>`
+      : `<span class="biz-name">${name}</span>`;
+
+    const card = document.createElement("div");
+    card.className = "biz-card";
+    card.innerHTML = `
+      <h3 class="biz-title">${nameHtml}</h3>
+      <p class="biz-meta">${location || ""}${hours ? " • " + hours : ""}</p>
+      <p class="biz-desc">${desc || ""}</p>
+      <span class="biz-cat">${category || ""}</span>
+    `;
+    list.appendChild(card);
+  });
+
+  postHeight();
+}
+
+function renderFilters(categories, data) {
+  const filters = document.getElementById("biz-filters");
+  filters.innerHTML = "";
+
+  const allBtn = document.createElement("button");
+  allBtn.textContent = "All";
+  allBtn.className = "biz-filter active";
+  filters.appendChild(allBtn);
+
+  categories.forEach(cat => {
+    const btn = document.createElement("button");
+    btn.textContent = cat;
+    btn.className = "biz-filter";
+    filters.appendChild(btn);
+  });
+
+  filters.querySelectorAll(".biz-filter").forEach(btn => {
+    btn.addEventListener("click", () => {
+      filters.querySelectorAll(".biz-filter").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      const cat = btn.textContent === "All" ? null : btn.textContent;
+      render(data, cat);
+    });
+  });
+}
+
+(async function init() {
+  const params = new URLSearchParams(window.location.search);
+  const csvUrl = params.get("csv");
+  if (!csvUrl) return;
+  const data = await loadCSV(csvUrl);
+
+  // Collect unique categories
+  const cats = [...new Set(data.slice(1).map(r => r[4].trim()).filter(Boolean))];
+  renderFilters(cats, data);
+  render(data);
+
+  setTimeout(postHeight, 300);
+})();
+</script>
+</body>
+</html>
