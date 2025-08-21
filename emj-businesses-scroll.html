@@ -71,7 +71,7 @@
   border-radius:10px; padding:10px 12px; box-shadow:0 4px 12px rgba(0,0,0,.06);
   display:flex; flex-direction:column; gap:6px;
 }
-.card.featured{ border-left-color:var(--featured); } /* gold accent when featured in list */
+.card.featured{ border-left-color:var(--featured); }
 .name{font-weight:700;color:var(--ink);text-decoration:none}.name:hover{color:var(--accent)}
 .desc{color:var(--muted);font-size:.9rem}
 .row{display:flex;gap:8px;flex-wrap:wrap;font-size:.82rem;color:#334155}
@@ -93,9 +93,9 @@
   <h3 class="h-title">Local Businesses</h3>
   <p class="h-sub">Browse Moose Jaw shops, eats, and services — tap to call, visit, or follow.</p>
 
-  <!-- New CTA -->
+  <!-- CTA -->
   <div class="listbiz">
-    <a class="listbiz-btn" href="https://YOURFORMURL" target="_blank" rel="noopener">➕ List Your Business</a>
+    <a class="listbiz-btn" id="listbiz-link" href="#" target="_blank" rel="noopener">➕ List Your Business</a>
   </div>
 
   <!-- Top Picks (Featured) -->
@@ -121,9 +121,12 @@
   const qs = new URLSearchParams(location.search);
   const CSV_URL = qs.get("src") || "https://docs.google.com/spreadsheets/d/e/2PACX-1vR0N9M2sACtG-R3_j6SQoZQkxgrjWDHWYVAVrL7mKaXliu_SxrMOwcg8giDTX5l-4zO1k2H2B2Btxsd/pub?gid=659667274&single=true&output=csv";
   const INCLUDE_FEATURED_IN_LIST = qs.get("includeFeaturedInList")==="1"; // optional override
+  const FORM_URL = qs.get("form") || "https://YOURFORMURL";
 
   const $ = (id)=>document.getElementById(id);
   const grid = $("grid"), chips=$("chips"), q=$("q"), count=$("count"), tp=$("tp");
+  const listLink = $("listbiz-link");
+  if (listLink) listLink.href = FORM_URL;
 
   /* CSV parser with quoted fields support */
   function parseCSV(text){
@@ -212,12 +215,13 @@
   function renderChips(list){
     chips.innerHTML = [`<button class="chip active" data-cat="__ALL__">All</button>`]
       .concat(list.map(c=>`<button class="chip" data-cat="${c}">${c}</button>`)).join("");
+    // persistent listener (fixed): no { once:true }
     chips.addEventListener("click",(e)=>{
       const el=e.target.closest(".chip"); if(!el) return;
       [...chips.children].forEach(b=>b.classList.remove("active"));
       el.classList.add("active");
       state.cat = el.dataset.cat; apply();
-    }, {once:true});
+    });
   }
 
   function apply(){
@@ -276,4 +280,3 @@
 })();
 </script>
 </body></html>
-
