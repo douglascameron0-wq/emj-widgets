@@ -1,0 +1,204 @@
+<!doctype html><html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Events – Scrollable Widget</title>
+<style>
+:root{
+  --accent:#ff7f50; --ink:#0f172a; --muted:#475569;
+  --card:#ffffff; --card-border:#e2e8f0;
+  --chip-bg:#fff1eb; --chip-border:#ffd8c8; --chip-ink:#b45309;
+}
+*{box-sizing:border-box}body{margin:0;font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial;color:var(--ink);background:transparent}
+.wrapper{padding:14px}
+
+/* Headings (match Businesses) */
+.h-title{margin:0 0 8px;font-size:1.12rem;font-weight:700}
+.h-sub{margin:0 0 12px;color:var(--muted);font-size:.95rem}
+
+/* Controls */
+.controls{display:grid;gap:10px;margin:0 0 10px}
+#q{width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:10px 12px;font-size:.95rem}
+.chips{display:grid;grid-auto-flow:column;grid-auto-columns:max-content;gap:8px;overflow-x:auto;padding-bottom:2px;scrollbar-width:thin}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:var(--chip-bg);border:1px solid var(--chip-border);color:var(--chip-ink);font-size:.9rem;cursor:pointer;user-select:none;white-space:nowrap;transition:transform .06s}
+.chip:hover{transform:translateY(-1px)}.chip.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.meta{font-size:.9rem;color:var(--muted)}
+
+/* Scroll shell + grid (same size as Businesses) */
+.scroll{border:1px solid var(--card-border);border-radius:10px;background:#fff;box-shadow:0 4px 16px rgba(0,0,0,.08);max-height:640px;overflow:auto;padding:10px}
+.grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.card{background:#fff;border:1px solid var(--card-border);border-left:4px solid var(--accent);border-radius:10px;padding:10px 12px;box-shadow:0 4px 12px rgba(0,0,0,.06);display:flex;flex-direction:column;gap:6px}
+.name{font-weight:700;color:var(--ink);text-decoration:none}.name:hover{color:var(--accent)}
+.desc{color:var(--muted);font-size:.9rem}
+.row{display:flex;gap:8px;flex-wrap:wrap;font-size:.82rem;color:#334155}
+.tag{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:999px;padding:2px 8px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.btn{display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:.88rem;text-decoration:none;color:#0f172a;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:7px 10px}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.i{font-style:normal}
+
+@media (max-width:640px){.wrapper{padding:12px} .scroll{max-height:70vh}}
+@media (prefers-reduced-motion:reduce){.chip{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrapper" id="app">
+  <h3 class="h-title">Upcoming Events</h3>
+  <p class="h-sub">Hand-picked Moose Jaw events — search and filter by category.</p>
+
+  <div class="controls" role="region" aria-label="Filters">
+    <input id="q" type="search" placeholder="Search name, category, or description…" aria-label="Search events">
+    <div id="chips" class="chips" role="listbox" aria-label="Filter by category"></div>
+    <div class="meta"><span id="count">0</span> results</div>
+  </div>
+
+  <div id="scroll" class="scroll" role="list" aria-label="Event results">
+    <div class="grid" id="grid"></div>
+  </div>
+
+  <noscript>Enable JavaScript to view events.</noscript>
+</div>
+
+<script>
+(function(){
+  const qs = new URLSearchParams(location.search);
+  const CSV_URL = qs.get("src") || "";
+  const MAX_H   = parseInt(qs.get("maxH")||"640",10);
+  const DAYS_AHEAD = parseInt(qs.get("days")||"120",10);
+  const TZ = qs.get("tz") || "America/Regina";
+
+  if (MAX_H > 0) {
+    const sc = document.querySelector('.scroll');
+    if (sc) sc.style.maxHeight = MAX_H + "px";
+  }
+
+  const $ = (id)=>document.getElementById(id);
+  const grid = $("grid"), chips=$("chips"), q=$("q"), count=$("count");
+
+  /* CSV parser with quotes support */
+  function parseCSV(text){
+    const rows=[]; let i=0, cur="", inQ=false, row=[];
+    while(i<text.length){
+      const c=text[i], n=text[i+1];
+      if(c==='\"'){ if(inQ && n==='\"'){cur+='\"'; i++;} else inQ=!inQ; }
+      else if(c===',' && !inQ){ row.push(cur); cur=""; }
+      else if((c==='\n'||c==='\r') && !inQ){ if(cur!==""||row.length){row.push(cur); rows.push(row); row=[]; cur="";} }
+      else cur+=c; i++;
+    }
+    if(cur!==""||row.length){row.push(cur); rows.push(row);}
+    const header = rows.shift().map(h=>h.trim());
+    return rows.filter(r=>r.length && r.some(x=>String(x).trim()!==""))
+               .map(r=>Object.fromEntries(header.map((h,idx)=>[h,(r[idx]||"").trim()])));
+  }
+
+  /* Date helpers */
+  function toDateLocal(s){
+    // accept yyyy-mm-dd or mm/dd/yyyy etc.
+    if(!s) return null;
+    const d = new Date(s);
+    return isNaN(d) ? null : d;
+  }
+  function startOfDay(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
+
+  function norm(s){return (s||"").toLowerCase();}
+
+  function btn(href,label,icon){
+    if(!href) return "";
+    const safe = href.startsWith("http") ? href : ("https://"+href);
+    return `<a class="btn" target="_blank" rel="noopener" href="${safe}"><span class="i">${icon}</span>${label}</a>`;
+  }
+
+  function card(e){
+    const dt = e.DateReadable || e.Date || "";
+    const name = e["Event Name"] || "Event";
+    const cat = e.Category || "";
+    const loc = e["Location & Time"] || "";
+    const desc = e.Description || "";
+    const url = e["More Info Link"] || "";
+    const rep = e.Repeat || "";
+
+    return `<article class="card" role="listitem">
+      <a class="name" ${url?`href="${url}" target="_blank" rel="noopener"`:""}>${name}</a>
+      <div class="row">
+        ${dt?`<span class="tag">${dt}</span>`:""}
+        ${loc?`<span class="tag">${loc}</span>`:""}
+        ${cat?`<span class="tag">${cat}</span>`:""}
+        ${rep?`<span class="tag">Repeat: ${rep}</span>`:""}
+      </div>
+      ${desc?`<p class="desc">${desc}</p>`:""}
+      <div class="actions">
+        ${url?btn(url,"Details","🔗"):""}
+      </div>
+    </article>`;
+  }
+
+  function catsFrom(data){
+    const set=new Set();
+    data.forEach(e=>String(e.Category||"").split(/[;|,/]/).map(s=>s.trim()).filter(Boolean).forEach(c=>set.add(c)));
+    return Array.from(set).sort();
+  }
+
+  function renderChips(list){
+    chips.innerHTML = [`<button class="chip active" data-cat="__ALL__">All</button>`]
+      .concat(list.map(c=>`<button class="chip" data-cat="${c}">${c}</button>`)).join("");
+    chips.addEventListener("click",(e)=>{
+      const el=e.target.closest(".chip"); if(!el) return;
+      [...chips.children].forEach(b=>b.classList.remove("active"));
+      el.classList.add("active");
+      state.cat = el.dataset.cat; apply();
+    });
+  }
+
+  const state={all:[], cat:"__ALL__", q:""};
+
+  function apply(){
+    const qv = norm(state.q);
+    let rows = state.all.slice();
+
+    // category filter
+    if(state.cat!=="__ALL__"){
+      const c = norm(state.cat);
+      rows = rows.filter(b => norm(b.Category||"").includes(c));
+    }
+
+    // search
+    if(qv){
+      rows = rows.filter(e=>{
+        const hay = [e["Event Name"], e.Description, e.Category, e["Location & Time"]].map(x=>norm(x)).join(" ");
+        return hay.includes(qv);
+      });
+    }
+
+    count.textContent = rows.length;
+    grid.innerHTML = rows.map(card).join("");
+  }
+
+  // Load + process
+  fetch(CSV_URL, {cache:"no-store"})
+    .then(r=>r.text())
+    .then(text=>{
+      const raw = parseCSV(text);
+
+      // Normalize + filter future events
+      const now = startOfDay(new Date());
+      const ahead = new Date(now); ahead.setDate(ahead.getDate()+DAYS_AHEAD);
+
+      const upcoming = raw.map(e=>{
+        const d = toDateLocal(e.Date);
+        if(d){ e._date = d; e.DateReadable = d.toLocaleDateString(undefined, {weekday:"short", month:"short", day:"numeric"}); }
+        return e;
+      })
+      .filter(e => e._date && e._date >= now && e._date <= ahead)
+      .sort((a,b)=>a._date - b._date);
+
+      state.all = upcoming;
+      renderChips(catsFrom(upcoming));
+      apply();
+    })
+    .catch(e=>{
+      grid.innerHTML = `<div style="padding:14px;color:#334155">Could not load events right now.</div>`;
+      console.error(e);
+    });
+
+})();
+</script>
+</body></html>
