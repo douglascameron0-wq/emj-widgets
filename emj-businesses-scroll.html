@@ -1,0 +1,263 @@
+<!doctype html><html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Local Businesses – Scrollable Widget</title>
+<style>
+:root{
+  --accent:#ff7f50;           /* coral, site accent */
+  --featured:#f59e0b;         /* amber/gold for featured */
+  --ink:#0f172a; --muted:#475569;
+  --card:#ffffff; --card-border:#e2e8f0;
+  --chip-bg:#fff1eb; --chip-border:#ffd8c8; --chip-ink:#b45309;
+}
+*{box-sizing:border-box}body{margin:0;font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial;color:var(--ink);background:#fff}
+.wrapper{padding:14px}
+
+/* Headings */
+.h-title{margin:0 0 8px;font-size:1.12rem;font-weight:700}
+.h-sub{margin:0 0 12px;color:var(--muted);font-size:.95rem}
+
+/* Controls */
+.controls{display:grid;gap:10px;margin:0 0 10px}
+#q{width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:10px 12px;font-size:.95rem}
+.chips{display:grid;grid-auto-flow:column;grid-auto-columns:max-content;gap:8px;overflow-x:auto;padding-bottom:2px;scrollbar-width:thin}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:var(--chip-bg);border:1px solid var(--chip-border);color:var(--chip-ink);font-size:.9rem;cursor:pointer;user-select:none;white-space:nowrap;transition:transform .06s}
+.chip:hover{transform:translateY(-1px)}.chip.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.meta{font-size:.9rem;color:var(--muted)}
+
+/* Top Picks micro-row (Featured) */
+.toppicks{
+  display:grid; gap:10px; grid-auto-flow:column; grid-auto-columns:minmax(220px,1fr);
+  overflow-x:auto; padding:8px 2px 10px; margin-bottom:10px; scrollbar-width:thin;
+}
+.tp-card{
+  position:relative; background:#fff; border:1px solid var(--card-border);
+  border-left:4px solid var(--featured); border-radius:10px; padding:10px 12px;
+  box-shadow:0 4px 12px rgba(0,0,0,.06); display:flex; flex-direction:column; gap:6px;
+}
+.tp-name{font-weight:700;color:var(--ink);text-decoration:none}
+.tp-name:hover{color:var(--featured)}
+.tp-row{display:flex;gap:8px;flex-wrap:wrap;font-size:.82rem;color:#334155}
+.tp-tag{background:#fff7ed;border:1px solid #fed7aa;border-radius:999px;padding:2px 8px;color:#9a3412}
+.tp-actions{display:flex;gap:8px;flex-wrap:wrap}
+.tp-btn{display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:.86rem;text-decoration:none;color:#0f172a;
+  background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:6px 9px}
+.tp-btn:hover{border-color:var(--featured);color:var(--featured)}
+.ribbon{
+  position:absolute; top:8px; right:10px; background:var(--featured); color:#fff;
+  font-size:.72rem; font-weight:700; padding:3px 8px; border-radius:999px; letter-spacing:.02em;
+}
+
+/* Main scroll area + grid */
+.scroll{border:1px solid var(--card-border);border-radius:10px;background:#fff;box-shadow:0 4px 16px rgba(0,0,0,.08);max-height:640px;overflow:auto;padding:10px}
+.grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+
+/* Card */
+.card{
+  position:relative; background:#fff; border:1px solid var(--card-border);
+  border-left:4px solid var(--accent); /* default accent */
+  border-radius:10px; padding:10px 12px; box-shadow:0 4px 12px rgba(0,0,0,.06);
+  display:flex; flex-direction:column; gap:6px;
+}
+.card.featured{ border-left-color:var(--featured); } /* gold accent on featured if shown in list */
+.name{font-weight:700;color:var(--ink);text-decoration:none}.name:hover{color:var(--accent)}
+.desc{color:var(--muted);font-size:.9rem}
+.row{display:flex;gap:8px;flex-wrap:wrap;font-size:.82rem;color:#334155}
+.tag{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:999px;padding:2px 8px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.btn{display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:.88rem;text-decoration:none;color:#0f172a;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:7px 10px}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.i{font-style:normal}
+
+@media (max-width:640px){
+  .wrapper{padding:12px}
+  .scroll{max-height:70vh}
+}
+@media (prefers-reduced-motion:reduce){.chip{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrapper" id="app">
+  <h3 class="h-title">Local Businesses</h3>
+  <p class="h-sub">Browse Moose Jaw shops, eats, and services — tap to call, visit, or follow.</p>
+
+  <!-- Top Picks (Featured) -->
+  <div id="tp" class="toppicks" aria-label="Top Picks"></div>
+
+  <!-- Controls -->
+  <div class="controls" role="region" aria-label="Filters">
+    <input id="q" type="search" placeholder="Search name, category, or description…" aria-label="Search businesses">
+    <div id="chips" class="chips" role="listbox" aria-label="Filter by category"></div>
+    <div class="meta"><span id="count">0</span> results</div>
+  </div>
+
+  <!-- Main list -->
+  <div id="scroll" class="scroll" role="list" aria-label="Business results">
+    <div class="grid" id="grid"></div>
+  </div>
+
+  <noscript>Enable JavaScript to view the directory.</noscript>
+</div>
+
+<script>
+(function(){
+  const qs = new URLSearchParams(location.search);
+  const CSV_URL = qs.get("src") || "https://docs.google.com/spreadsheets/d/e/2PACX-1vR0N9M2sACtG-R3_j6SQoZQkxgrjWDHWYVAVrL7mKaXliu_SxrMOwcg8giDTX5l-4zO1k2H2B2Btxsd/pub?gid=659667274&single=true&output=csv";
+  const INCLUDE_FEATURED_IN_LIST = qs.get("includeFeaturedInList")==="1"; // optional override
+
+  const $ = (id)=>document.getElementById(id);
+  const grid = $("grid"), chips=$("chips"), q=$("q"), count=$("count"), tp=$("tp");
+
+  /* CSV parser with quoted fields support */
+  function parseCSV(text){
+    const rows=[]; let i=0, cur="", inQ=false, row=[];
+    while(i<text.length){
+      const c=text[i], n=text[i+1];
+      if(c==='\"'){ if(inQ && n==='\"'){cur+='\"'; i++;} else inQ=!inQ; }
+      else if(c===',' && !inQ){ row.push(cur); cur=""; }
+      else if((c==='\n'||c==='\r') && !inQ){ if(cur!==""||row.length){row.push(cur); rows.push(row); row=[]; cur="";} }
+      else cur+=c; i++;
+    }
+    if(cur!==""||row.length){row.push(cur); rows.push(row);}
+    const header = rows.shift().map(h=>h.trim());
+    return rows.filter(r=>r.length && r.some(x=>String(x).trim()!==""))
+               .map(r=>Object.fromEntries(header.map((h,idx)=>[h,(r[idx]||"").trim()])));
+  }
+
+  const state={all:[], featured:[], rest:[], cat:"__ALL__", q:""};
+
+  function norm(s){return (s||"").toLowerCase();}
+  function isFeatured(v){ return /^(yes|true|1|y)$/i.test(String(v||"").trim()); }
+  function telify(s){return s?("tel:"+s.replace(/[^0-9+]/g,"")):"";}
+  function btn(href,label,icon){
+    if(!href) return "";
+    const safe = href.startsWith("tel:")||href.startsWith("http") ? href : ("https://"+href);
+    return `<a class="btn" target="_blank" rel="noopener" href="${safe}"><span class="i">${icon}</span>${label}</a>`;
+  }
+  function tpBtn(href,label,icon){
+    if(!href) return "";
+    const safe = href.startsWith("tel:")||href.startsWith("http") ? href : ("https://"+href);
+    return `<a class="tp-btn" target="_blank" rel="noopener" href="${safe}"><span class="i">${icon}</span>${label}</a>`;
+  }
+
+  /* Cards */
+  function card(b, markFeaturedInList){
+    const name=b.Name||"Business";
+    const site=b.Website||"";
+    const phone=b["Phone Number"]||b.Phone||b["Phone #"]||b.Call||"";
+    const fb=b.Facebook||""; const ig=b.Instagram||"";
+    const loc=b.Location||"", hrs=b.Hours||"", cat=b.Category||"", desc=b.Description||"";
+    const f=isFeatured(b.Featured);
+
+    return `<article class="card ${f && markFeaturedInList ? 'featured' : ''}" role="listitem">
+      ${f && markFeaturedInList ? `<span class="ribbon">Featured</span>`:""}
+      <a class="name" ${site?`href="${site}" target="_blank" rel="noopener"`:""}>${name}</a>
+      <div class="row">
+        ${loc?`<span class="tag">${loc}</span>`:""}
+        ${hrs?`<span class="tag">${hrs}</span>`:""}
+        ${cat?`<span class="tag">${cat}</span>`:""}
+      </div>
+      ${desc?`<p class="desc">${desc}</p>`:""}
+      <div class="actions">
+        ${phone?btn(telify(phone),"Call","📞"):""}
+        ${site?btn(site,"Website","🌐"):""}
+        ${fb?btn(fb,"Facebook","📘"):""}
+        ${ig?btn(ig,"Instagram","📸"):""}
+      </div>
+    </article>`;
+  }
+
+  function tpCard(b){
+    const name=b.Name||"Business";
+    const site=b.Website||"";
+    const phone=b["Phone Number"]||b.Phone||b["Phone #"]||b.Call||"";
+    const loc=b.Location||"", cat=b.Category||"";
+    return `<article class="tp-card">
+      <span class="ribbon">Featured</span>
+      <a class="tp-name" ${site?`href="${site}" target="_blank" rel="noopener"`:""}>${name}</a>
+      <div class="tp-row">
+        ${loc?`<span class="tp-tag">${loc}</span>`:""}
+        ${cat?`<span class="tp-tag">${cat}</span>`:""}
+      </div>
+      <div class="tp-actions">
+        ${phone?tpBtn(telify(phone),"Call","📞"):""}
+        ${site?tpBtn(site,"Website","🌐"):""}
+      </div>
+    </article>`;
+  }
+
+  function catsFrom(data){
+    const set=new Set();
+    data.forEach(b=>String(b.Category||"").split(/[;|,/]/).map(s=>s.trim()).filter(Boolean).forEach(c=>set.add(c)));
+    return Array.from(set).sort();
+  }
+
+  function renderChips(list){
+    chips.innerHTML = [`<button class="chip active" data-cat="__ALL__">All</button>`]
+      .concat(list.map(c=>`<button class="chip" data-cat="${c}">${c}</button>`)).join("");
+    chips.addEventListener("click",(e)=>{
+      const el=e.target.closest(".chip"); if(!el) return;
+      [...chips.children].forEach(b=>b.classList.remove("active"));
+      el.classList.add("active");
+      state.cat = el.dataset.cat; apply();
+    }, {once:true});
+  }
+
+  function apply(){
+    const qv = norm(state.q);
+
+    // Base pool for main list: exclude featured unless override flag is set
+    let pool = INCLUDE_FEATURED_IN_LIST ? state.all.slice() : state.rest.slice();
+
+    // Category filter
+    if(state.cat!=="__ALL__"){
+      const c = norm(state.cat);
+      pool = pool.filter(b => norm(b.Category||"").includes(c));
+    }
+
+    // Search
+    if(qv){
+      pool = pool.filter(b=>{
+        const hay = [b.Name,b.Description,b.Category,b.Location,b.Hours].map(x=>norm(x)).join(" ");
+        return hay.includes(qv);
+      });
+    }
+
+    // Sort: if featured are included in list, keep them first, then name; else sort by name
+    pool.sort((a,b)=>{
+      if(INCLUDE_FEATURED_IN_LIST){
+        const fa = isFeatured(a.Featured), fb = isFeatured(b.Featured);
+        if(fa!==fb) return fa? -1 : 1;
+      }
+      return String(a.Name||"").localeCompare(String(b.Name||""), undefined, {sensitivity:"base"});
+    });
+
+    count.textContent = pool.length;
+    grid.innerHTML = pool.map(b => card(b, INCLUDE_FEATURED_IN_LIST)).join("");
+  }
+
+  q.addEventListener("input",e=>{state.q=e.target.value.trim(); apply();});
+
+  fetch(CSV_URL,{cache:"no-store"})
+    .then(r=>r.text())
+    .then(t=>{
+      const data=parseCSV(t);
+      state.all = data;
+      state.featured = data.filter(r => isFeatured(r.Featured));
+      state.rest = data.filter(r => !isFeatured(r.Featured));
+
+      // Render Top Picks row (only if there are featured)
+      tp.innerHTML = state.featured.length
+        ? state.featured.map(tpCard).join("")
+        : "";
+
+      renderChips(catsFrom(data));
+      apply();
+    })
+    .catch(e=>{
+      grid.innerHTML = `<div style="padding:14px;color:#334155">Could not load businesses right now.</div>`;
+      console.error(e);
+    });
+})();
+</script>
+</body></html>
