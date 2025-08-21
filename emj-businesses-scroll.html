@@ -17,6 +17,18 @@
 .h-title{margin:0 0 8px;font-size:1.12rem;font-weight:700}
 .h-sub{margin:0 0 12px;color:var(--muted);font-size:.95rem}
 
+/* CTA: List Your Business */
+.listbiz{margin:0 0 14px}
+.listbiz-btn{
+  display:inline-flex; align-items:center; gap:6px;
+  background: var(--accent); color:#fff;
+  font-weight:600; font-size:.95rem;
+  text-decoration:none; padding:8px 14px;
+  border-radius:999px; box-shadow:0 2px 6px rgba(0,0,0,.12);
+  transition: background .15s ease;
+}
+.listbiz-btn:hover{ background:#e66f3f }
+
 /* Controls */
 .controls{display:grid;gap:10px;margin:0 0 10px}
 #q{width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:10px 12px;font-size:.95rem}
@@ -59,7 +71,7 @@
   border-radius:10px; padding:10px 12px; box-shadow:0 4px 12px rgba(0,0,0,.06);
   display:flex; flex-direction:column; gap:6px;
 }
-.card.featured{ border-left-color:var(--featured); } /* gold accent on featured if shown in list */
+.card.featured{ border-left-color:var(--featured); } /* gold accent when featured in list */
 .name{font-weight:700;color:var(--ink);text-decoration:none}.name:hover{color:var(--accent)}
 .desc{color:var(--muted);font-size:.9rem}
 .row{display:flex;gap:8px;flex-wrap:wrap;font-size:.82rem;color:#334155}
@@ -80,6 +92,11 @@
 <div class="wrapper" id="app">
   <h3 class="h-title">Local Businesses</h3>
   <p class="h-sub">Browse Moose Jaw shops, eats, and services — tap to call, visit, or follow.</p>
+
+  <!-- New CTA -->
+  <div class="listbiz">
+    <a class="listbiz-btn" href="https://YOURFORMURL" target="_blank" rel="noopener">➕ List Your Business</a>
+  </div>
 
   <!-- Top Picks (Featured) -->
   <div id="tp" class="toppicks" aria-label="Top Picks"></div>
@@ -247,9 +264,7 @@
       state.rest = data.filter(r => !isFeatured(r.Featured));
 
       // Render Top Picks row (only if there are featured)
-      tp.innerHTML = state.featured.length
-        ? state.featured.map(tpCard).join("")
-        : "";
+      tp.innerHTML = state.featured.length ? state.featured.map(tpCard).join("") : "";
 
       renderChips(catsFrom(data));
       apply();
@@ -261,3 +276,4 @@
 })();
 </script>
 </body></html>
+
