@@ -1,0 +1,127 @@
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Local Guides</title>
+<style>
+:root{--ink:#0f172a;--muted:#475569;--accent:#ff7f50}
+body{margin:0;background:transparent;font:16px/1.5 system-ui,Segoe UI,Roboto,Arial}
+.wrap{padding:12px}
+.band{background:linear-gradient(180deg,#1e293b 0%,#334155 100%);border-radius:12px;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 4px 16px rgba(0,0,0,.15);color:#fff}
+.inner{padding:16px 16px 18px}
+.title{margin:0 0 10px;font-weight:700}
+.list{display:grid;gap:12px;margin:0}
+.btn{border:0;border-radius:12px;cursor:pointer;width:100%;text-align:left;background:rgba(255,255,255,.06);color:#e5e7eb;padding:14px 14px 12px}
+.btn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(0,0,0,.18)}
+.btn:focus{outline:2px solid var(--accent);outline-offset:2px}
+.btn h3{margin:0 0 6px;color:#fff;font-size:1.05rem}
+.btn p{margin:0 0 6px;color:#cbd5e1}
+.link{color:var(--accent);font-weight:700;text-decoration:none}
+.panel{background:rgba(255,255,255,.05);border-radius:12px;margin-top:12px;overflow:hidden;max-height:0;transition:max-height .35s ease}
+.panel.open{max-height:1200px}
+.panel-inner{padding:14px 14px 12px;color:#e5e7eb}
+.panel-inner h4{margin:0 0 8px;color:#fff}
+.panel-inner p{margin:0 0 8px;color:#d1d5db}
+.close{display:inline-block;margin-top:6px;background:var(--accent);color:#fff;border:0;padding:8px 12px;border-radius:10px;cursor:pointer;font-weight:700}
+.small{opacity:.8}
+</style>
+</head><body>
+<div class="wrap">
+  <div class="band"><div class="inner">
+    <h2 class="title">📰 <span id="h">Local Guides</span></h2>
+    <div id="status" class="small">Loading…</div>
+    <div id="list" class="list" hidden></div>
+    <div id="panels"></div>
+  </div></div>
+</div>
+
+<script>
+(function(){
+  const qs=s=>document.querySelector(s), qsa=s=>Array.from(document.querySelectorAll(s));
+  // Read params: src (csv url), title (optional), limit (optional), openOne=true|false
+  const url=new URL(location.href);
+  const CSV=url.searchParams.get('src')||'';
+  const TITLE=url.searchParams.get('title')||'Local Guides';
+  const LIMIT=parseInt(url.searchParams.get('limit')||'0',10)||0;
+  const OPEN_ONE=(url.searchParams.get('openOne')??'true')!=='false';
+  qs('#h').textContent=TITLE;
+
+  const status=qs('#status'), list=qs('#list'), panels=qs('#panels');
+  if(!CSV){ status.textContent='Missing ?src=CSV_URL'; return; }
+
+  function csvParse(text){
+    const lines=text.split(/\r?\n/).filter(l=>l.trim().length);
+    const out=[]; let headers=[];
+    lines.forEach((line,i)=>{
+      const cells=[]; let cur='',inQ=false;
+      for(let c=0;c<line.length;c++){
+        const ch=line[c], nxt=line[c+1];
+        if(ch==='"'){ if(inQ&&nxt==='"'){cur+='"';c++;} else inQ=!inQ; }
+        else if(ch===',' && !inQ){ cells.push(cur); cur=''; }
+        else { cur+=ch; }
+      }
+      cells.push(cur);
+      if(i===0){ headers=cells.map(h=>h.trim().toLowerCase()); out.push(headers); }
+      else out.push(cells);
+    });
+    return out.slice(1).map(row=>{
+      const obj={}; headers.forEach((h,idx)=>obj[h]=(row[idx]||'').trim()); return obj;
+    });
+  }
+
+  const sanitizeId=s=>(s||'').toLowerCase().replace(/[^a-z0-9\-]/g,'-')||('guide-'+Math.random().toString(36).slice(2));
+
+  function render(items){
+    status.remove(); list.hidden=false; list.innerHTML=''; panels.innerHTML='';
+    items.forEach(it=>{
+      const id=sanitizeId(it.id);
+      const btn=document.createElement('button');
+      btn.className='btn'; btn.dataset.target=id; btn.setAttribute('aria-controls',id); btn.setAttribute('aria-expanded','false');
+      btn.innerHTML=`<h3>${it.title||'Untitled'}</h3>${it.subtitle?`<p>${it.subtitle}</p>`:''}<span class="link">Open →</span>`;
+      list.appendChild(btn);
+
+      const panel=document.createElement('div');
+      panel.id=id; panel.className='panel'; panel.setAttribute('role','region'); panel.setAttribute('aria-label', it.title||'Guide');
+      panel.innerHTML=`<div class="panel-inner"><h4>${it.title||'Guide'}</h4><div>${it.content_html||''}</div><button class="close" data-close="${id}">Close</button></div>`;
+      panels.appendChild(panel);
+    });
+
+    // wiring
+    qsa('.btn').forEach(b=>{
+      b.addEventListener('click',()=>{
+        const id=b.dataset.target, p=qs('#'+id); if(!p) return;
+        const isOpen=p.classList.contains('open');
+        if(OPEN_ONE){ qsa('.panel.open').forEach(x=>{x.classList.remove('open'); const tb=qsa('.btn').find(z=>z.dataset.target===x.id); if(tb) tb.setAttribute('aria-expanded','false');}); }
+        if(!isOpen){ p.classList.add('open'); b.setAttribute('aria-expanded','true'); setTimeout(()=>p.scrollIntoView({behavior:'smooth',block:'start'}),40); location.hash=id; }
+        else { p.classList.remove('open'); b.setAttribute('aria-expanded','false'); history.replaceState(null,'','#'); }
+      });
+    });
+    qsa('.close').forEach(c=>c.addEventListener('click',e=>{
+      const id=c.dataset.close, p=qs('#'+id); if(p) p.classList.remove('open');
+      const b=qsa('.btn').find(z=>z.dataset.target===id); if(b){b.setAttribute('aria-expanded','false'); b.focus();}
+      history.replaceState(null,'','#'); e.stopPropagation();
+    }));
+
+    // deep link open
+    const hash=location.hash.replace('#',''); if(hash){ const b=qsa('.btn').find(z=>z.dataset.target===hash); if(b) b.click(); }
+  }
+
+  async function init(){
+    try{
+      status.textContent='Loading…';
+      const resp=await fetch(CSV+(CSV.includes('?')?'&':'?')+'cb='+Date.now(),{cache:'no-store'});
+      if(!resp.ok) throw new Error('fetch failed');
+      const text=await resp.text();
+      let rows=csvParse(text);
+      rows = rows.filter(x => (x.visible||'').toLowerCase()!=='false' && (x.id||'').trim());
+      rows.sort((a,b)=>(parseFloat(a.weight||'999')||999)-(parseFloat(b.weight||'999')||999));
+      if(LIMIT && rows.length>LIMIT) rows=rows.slice(0,LIMIT);
+      if(!rows.length){ status.innerHTML='No guides found. Check headers: <code>id|title|subtitle|content_html|visible|weight</code>'; return; }
+      render(rows);
+    } catch(err){
+      console.error(err);
+      status.textContent='Could not load guides. Check CSV URL and publishing.';
+    }
+  }
+  init();
+})();
+</script>
+</body></html>
