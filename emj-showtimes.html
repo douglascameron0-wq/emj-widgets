@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>EMJ — Local Showtimes</title>
+  <style>
+    :root{
+      --ink:#0f172a; --muted:#64748b; --card:#0b1220; --card-ink:#e5e7eb;
+      --accent:#22d3ee; --accent-ink:#0b1220; --chip:#122033; --chip-ink:#cfe8ff;
+      --border:rgba(255,255,255,.08);
+    }
+    html,body{margin:0;padding:0;background:transparent;color:var(--card-ink);font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji";}
+    .mj-band{background:linear-gradient(180deg,#1e293b 0%,#334155 100%);border-radius:14px;box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 6px 20px rgba(0,0,0,.2);max-width:1100px;margin:0 auto;padding:20px clamp(14px,3vw,28px) 24px;}
+    .mj-title{margin:0 0 4px;font-weight:800;letter-spacing:-.01em;font-size:clamp(18px,2.2vw,26px);color:white}
+    .mj-sub{margin:0 0 16px;color:#cbd5e1;font-size:clamp(13px,1.5vw,14px)}
+    .mj-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+    .mj-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}
+    .mj-head{display:flex;align-items:start;gap:10px}
+    .mj-badge{font-size:11px;background:#0f172a;border:1px solid var(--border);border-radius:999px;padding:2px 8px;white-space:nowrap;color:#cbd5e1}
+    .mj-movie{margin:0;font-weight:750;font-size:clamp(15px,1.9vw,18px);line-height:1.2;color:#e2e8f0}
+    .mj-times{display:flex;flex-wrap:wrap;gap:6px}
+    .mj-chip{background:var(--chip);color:var(--chip-ink);border:1px solid var(--border);padding:6px 10px;border-radius:999px;font-size:12px}
+    .mj-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .mj-spacer{flex:1}
+    .mj-btn{appearance:none;border:1px solid var(--accent);background:transparent;color:var(--accent);border-radius:999px;padding:8px 10px;font-weight:700;font-size:13px;cursor:pointer;transition:transform .04s ease, background .2s ease, color .2s ease}
+    .mj-btn:hover{background:var(--accent);color:var(--accent-ink)}
+    .mj-btn:disabled{opacity:.6;cursor:not-allowed}
+    .mj-count{font-variant-numeric:tabular-nums}
+    .mj-foot{margin-top:14px;border-top:1px dashed var(--border);padding-top:12px;color:#94a3b8;font-size:12px}
+    .mj-empty{opacity:.7;border:1px dashed var(--border);border-radius:12px;padding:16px;text-align:center}
+    .mj-error{color:#fecaca}
+    @media (max-width:540px){ .mj-list{grid-template-columns:1fr} }
+  </style>
+</head>
+<body>
+<section id="mj-showtimes" class="mj-band" aria-label="Local Showtimes">
+  <h2 class="mj-title">🎬 Local Showtimes — Moose Jaw</h2>
+  <p class="mj-sub">Fresh daily from Galaxy Cinemas Moose Jaw. Tap a title to expand. Click “I’m interested” to show love — totals are anonymous.</p>
+
+  <div id="list" class="mj-list" role="list"></div>
+  <div id="foot" class="mj-foot"></div>
+  <template id="card">
+    <article class="mj-card" role="listitem">
+      <div class="mj-head">
+        <span class="mj-badge" data-badge></span>
+        <h3 class="mj-movie" data-title></h3>
+        <div class="mj-spacer"></div>
+        <div class="mj-count" data-count>0</div>
+      </div>
+      <div class="mj-row">
+        <div data-format class="mj-badge"></div>
+        <div data-rating class="mj-badge"></div>
+        <div data-runtime class="mj-badge"></div>
+      </div>
+      <div class="mj-times" data-times></div>
+      <div class="mj-row">
+        <button class="mj-btn" data-like>I'm interested</button>
+        <a class="mj-btn" data-link target="_blank" rel="noopener">Get tickets</a>
+      </div>
+    </article>
+  </template>
+
+  <div id="empty" class="mj-empty" hidden>
+    No showtimes found. Double-check your CSV link or date parameter.
+  </div>
+  <div id="error" class="mj-empty mj-error" hidden></div>
+</section>
+
+<script>
+// ——— Configuration ———
+// (1) Google Sheets CSV URL (File → Share → Publish to web → CSV)
+// You can override this by adding ?csv=ENCODED_LINK to the iframe URL.
+const SHEET_CSV_URL = new URLSearchParams(location.search).get('csv') ||
+  "YOUR_PUBLISHED_SHEET_CSV_URL_HERE";
+
+// (2) Namespace for CountAPI (public, simple counter).
+// Override with ?ns=eventsmoosejaw.ca . Set to '' to disable global counts.
+const COUNT_API_NAMESPACE = new URLSearchParams(location.search).get('ns') || "eventsmoosejaw.ca";
+
+// (3) Optional date filter (YYYY-MM-DD). Defaults to today in America/Regina.
+const DATE_FILTER = new URLSearchParams(location.search).get('date') || new Date().toLocaleDateString('en-CA', { timeZone: 'America/Regina' });
+
+// ——— Utilities ———
+const $ = sel => document.querySelector(sel);
+function csvToRows(csv){
+  // Robust-ish CSV parsing (handles quotes and newlines)
+  const rows = []; let i=0, field='', row=[], inQuotes=false;
+  while(i<csv.length){
+    const c = csv[i];
+    if(c === '"'){
+      if(inQuotes && csv[i+1] === '"'){ field+='"'; i++; }
+      else { inQuotes = !inQuotes; }
+    }else if(c === ',' && !inQuotes){
+      row.push(field); field='';
+    }else if((c === '\n' || c === '\r') && !inQuotes){
+      // placeholder, we will not hit this branch
+      i++;
+    }else if((c === '\n' && inQuotes) || (c === '\r' && inQuotes)){
+      field += c;
+    }else{
+      if(c === '\n' || c === '\r'){
+        // Should never happen
+      }
+    }
+    // Actual newline/CR handling:
+    if(c === '\n' || c === '\r'){ /* do nothing here; these are literals in string */ }
+    i++;
+  }
+  // Fallback simple split if parser above fails
+  return csv.split(/\r?\n/).filter(Boolean).map(line => line.split(','));
+}
+function toSlug(s){ return s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''); }
+function uniq(a){ return [...new Set(a)]; }
+
+// ——— Interest counter (CountAPI with localStorage fallback) ———
+async function getCount(key){
+  if(!COUNT_API_NAMESPACE) return Number(localStorage.getItem('count:'+key) || 0);
+  try{
+    const r = await fetch(`https://api.countapi.xyz/get/${encodeURIComponent(COUNT_API_NAMESPACE)}/${encodeURIComponent(key)}`);
+    const j = await r.json(); return j.value ?? 0;
+  }catch(e){
+    return Number(localStorage.getItem('count:'+key) || 0);
+  }
+}
+async function incCount(key){
+  // prevent double taps per user per day
+  const onceKey = 'liked:'+key;
+  if(localStorage.getItem(onceKey)) return getCount(key);
+  localStorage.setItem(onceKey,'1');
+  if(!COUNT_API_NAMESPACE){
+    const v = Number(localStorage.getItem('count:'+key) || 0) + 1;
+    localStorage.setItem('count:'+key, String(v)); return v;
+  }
+  try{
+    const r = await fetch(`https://api.countapi.xyz/hit/${encodeURIComponent(COUNT_API_NAMESPACE)}/${encodeURIComponent(key)}`);
+    const j = await r.json(); return j.value ?? 0;
+  }catch(e){
+    const v = Number(localStorage.getItem('count:'+key) || 0) + 1;
+    localStorage.setItem('count:'+key, String(v)); return v;
+  }
+}
+
+// ——— Load + render ———
+(async function(){
+  const listEl = $("#list"); const emptyEl=$("#empty"); const errEl=$("#error"); const footEl=$("#foot");
+  try{
+    const res = await fetch(SHEET_CSV_URL, {cache:'no-store'});
+    if(!res.ok) throw new Error("Failed to fetch sheet CSV");
+    const text = await res.text();
+    const lines = text.split(/\r?\n/).filter(l=>l.trim().length>0);
+    const headers = lines.shift().split(',').map(h=>h.trim().toLowerCase());
+    const idx = {
+      date: headers.indexOf('date'),
+      cinema: headers.indexOf('cinema'),
+      address: headers.indexOf('address'),
+      movie: headers.indexOf('movie'),
+      format: headers.indexOf('format'),
+      times: headers.indexOf('times'),
+      rating: headers.indexOf('rating'),
+      runtime: headers.indexOf('runtime_min'),
+      url: headers.indexOf('more_info_url')
+    };
+    const rows = lines.map(line => line.split(',').map(v=>v.trim()));
+    const todayRows = rows.filter(r => (r[idx.date]||'').trim() === DATE_FILTER);
+    listEl.innerHTML = '';
+    if(!todayRows.length){ emptyEl.hidden=false; return; }
+
+    const tmpl = document.getElementById('card');
+    const cards = todayRows.map(r => {
+      const el = tmpl.content.firstElementChild.cloneNode(true);
+      const movie = r[idx.movie] || '';
+      const cinema = r[idx.cinema] || '';
+      const rating = r[idx.rating] || '';
+      const runtime = r[idx.runtime] || '';
+      const format = r[idx.format] || '2D';
+      const times = (r[idx.times]||'').split(/;|,|\|/).map(s=>s.trim()).filter(Boolean);
+      const url = r[idx.url] || 'https://www.cineplex.com/theatre/galaxy-cinemas-moose-jaw/';
+      const key = `${DATE_FILTER}|${movie}`;
+
+      el.querySelector('[data-badge]').textContent = new Date(DATE_FILTER).toLocaleDateString(undefined,{weekday:'short', month:'short', day:'numeric'});
+      el.querySelector('[data-title]').textContent = movie;
+      el.querySelector('[data-format]').textContent = format;
+      el.querySelector('[data-rating]').textContent = rating ? `Rated ${rating}` : '';
+      el.querySelector('[data-runtime]').textContent = runtime ? `${runtime} min` : '';
+      const timesBox = el.querySelector('[data-times]');
+      times.forEach(t => {
+        const chip = document.createElement('span'); chip.className='mj-chip'; chip.textContent=t; timesBox.appendChild(chip);
+      });
+
+      const link = el.querySelector('[data-link]'); link.href = url; link.textContent = 'Get tickets';
+
+      const likeBtn = el.querySelector('[data-like]');
+      const countEl = el.querySelector('[data-count]');
+      getCount(toSlug(key)).then(v => countEl.textContent = v);
+      likeBtn.addEventListener('click', async () => {
+        likeBtn.disabled = true;
+        const v = await incCount(toSlug(key));
+        countEl.textContent = v;
+        setTimeout(()=>{ likeBtn.disabled=false; }, 800);
+      });
+      return el;
+    });
+
+    cards.forEach(c => listEl.appendChild(c));
+    footEl.textContent = `Auto-updated for ${DATE_FILTER} • Source: Google Sheet • Tip: add tomorrow’s date as new rows to pre-schedule.`;
+  }catch(err){
+    errEl.hidden = false; errEl.textContent = 'Error: '+ err.message;
+  }
+})();
+</script>
+</body>
+</html>
