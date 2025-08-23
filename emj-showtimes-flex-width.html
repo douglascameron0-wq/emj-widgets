@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EMJ — Local Showtimes (Flexible + Width Param)</title>
+<style>
+  :root{
+    --ink:#0f172a; --muted:#64748b; --card:#0b1220; --card-ink:#e5e7eb;
+    --accent:#22d3ee; --accent-ink:#0b1220; --chip:#122033; --chip-ink:#cfe8ff;
+    --border:rgba(255,255,255,.08);
+    --maxw: 1280px; /* default; can be overridden via ?mw= */
+  }
+  html,body{margin:0;padding:0;background:transparent;color:var(--card-ink);font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji";}
+  .mj-band{background:linear-gradient(180deg,#1e293b 0%,#334155 100%);border-radius:14px;box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 6px 20px rgba(0,0,0,.2);max-width:var(--maxw);width:100%;margin:0 auto;padding:20px clamp(14px,3vw,28px) 24px;}
+  .mj-title{margin:0 0 4px;font-weight:800;letter-spacing:-.01em;font-size:clamp(18px,2.2vw,26px);color:#fff}
+  .mj-sub{margin:0 0 16px;color:#cbd5e1;font-size:clamp(13px,1.5vw,14px)}
+  .mj-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+  .mj-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}
+  .mj-head{display:flex;align-items:start;gap:10px}
+  .mj-badge{font-size:11px;background:#0f172a;border:1px solid var(--border);border-radius:999px;padding:2px 8px;white-space:nowrap;color:#cbd5e1}
+  .mj-movie{margin:0;font-weight:750;font-size:clamp(15px,1.9vw,18px);line-height:1.2;color:#e2e8f0}
+  .mj-times{display:flex;flex-wrap:wrap;gap:6px}
+  .mj-chip{background:var(--chip);color:var(--chip-ink);border:1px solid var(--border);padding:6px 10px;border-radius:999px;font-size:12px}
+  .mj-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .mj-spacer{flex:1}
+  .mj-btn{appearance:none;border:1px solid var(--accent);background:transparent;color:var(--accent);border-radius:999px;padding:8px 10px;font-weight:700;font-size:13px;cursor:pointer;transition:transform .04s ease, background .2s ease, color .2s ease}
+  .mj-btn:hover{background:var(--accent);color:var(--accent-ink)}
+  .mj-btn:disabled{opacity:.6;cursor:not-allowed}
+  .mj-count{font-variant-numeric:tabular-nums}
+  .mj-foot{margin-top:14px;border-top:1px dashed var(--border);padding-top:12px;color:#94a3b8;font-size:12px}
+  .mj-empty{opacity:.7;border:1px dashed var(--border);border-radius:12px;padding:16px;text-align:center}
+  .mj-error{color:#fecaca}
+  .mj-date{margin:6px 0 12px;color:#cbd5e1;font-size:13px}
+  @media (max-width:540px){ .mj-list{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<section id="mj-showtimes" class="mj-band" aria-label="Local Showtimes">
+  <h2 class="mj-title" id="title">🎬 Local Showtimes — Moose Jaw</h2>
+  <p class="mj-sub" id="sub">Fresh from Galaxy Cinemas Moose Jaw. If today has no listings, we’ll show the nearest date.</p>
+  <div class="mj-date" id="dateLabel"></div>
+
+  <div id="list" class="mj-list" role="list"></div>
+  <div id="foot" class="mj-foot"></div>
+  <template id="card">
+    <article class="mj-card" role="listitem">
+      <div class="mj-head">
+        <span class="mj-badge" data-badge></span>
+        <h3 class="mj-movie" data-title></h3>
+        <div class="mj-spacer"></div>
+        <div class="mj-count" data-count>0</div>
+      </div>
+      <div class="mj-row">
+        <div data-format class="mj-badge"></div>
+        <div data-rating class="mj-badge"></div>
+        <div data-runtime class="mj-badge"></div>
+      </div>
+      <div class="mj-times" data-times></div>
+      <div class="mj-row">
+        <button class="mj-btn" data-like>I'm interested</button>
+        <a class="mj-btn" data-link target="_blank" rel="noopener">Get tickets</a>
+      </div>
+    </article>
+  </template>
+
+  <div id="empty" class="mj-empty" hidden>
+    No showtimes found for this sheet.
+  </div>
+  <div id="error" class="mj-empty mj-error" hidden></div>
+</section>
+
+<script>
+const QS = new URLSearchParams(location.search);
+const SHEET_CSV_URL = QS.get('csv') || "YOUR_PUBLISHED_SHEET_CSV_URL_HERE";
+const COUNT_API_NAMESPACE = QS.get('ns') || "eventsmoosejaw.ca";
+const TZ = QS.get('tz') || 'America/Regina';
+const MODE = QS.get('mode') || 'auto'; // 'auto' (today then nearest), 'today', 'nearest', 'all'
+const FORCE_DATE = QS.get('date'); // YYYY-MM-DD
+const TITLE = QS.get('title') || '';
+const SUB = QS.get('sub') || '';
+const MAXW = QS.get('mw'); // e.g., 1280, 1100, 100%
+
+// Apply width if provided
+if(MAXW){
+  let val = decodeURIComponent(MAXW);
+  if(/^\d+$/.test(val)) val = val + 'px';
+  document.documentElement.style.setProperty('--maxw', val);
+}
+
+// Helpers
+const $ = s => document.querySelector(s);
+function fmtDateLabel(iso){ try { return new Date(iso+'T12:00:00').toLocaleDateString(undefined,{weekday:'short', month:'short', day:'numeric'});}catch(e){return iso;} }
+function toSlug(s){ return (s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''); }
+function todayISO(){ return new Date().toLocaleDateString('en-CA',{ timeZone: TZ }); }
+// Robust CSV parser (quotes + commas + newlines)
+function parseCSV(text){
+  const rows=[]; let row=[], field='', inQuotes=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(inQuotes){
+      if(c === '"'){
+        if(i+1<text.length && text[i+1] === '"'){ field+='"'; i++; }
+        else { inQuotes=false; }
+      } else { field += c; }
+    } else {
+      if(c === '"'){ inQuotes=true; }
+      else if(c === ','){ row.push(field); field=''; }
+      else if(c === '\n'){ row.push(field); rows.push(row); row=[]; field=''; }
+      else if(c === '\r'){ /* ignore */ }
+      else { field += c; }
+    }
+  }
+  if(field.length || row.length){ row.push(field); rows.push(row); }
+  return rows;
+}
+
+async function getCount(key){
+  if(!COUNT_API_NAMESPACE) return Number(localStorage.getItem('count:'+key) || 0);
+  try{
+    const r = await fetch(`https://api.countapi.xyz/get/${encodeURIComponent(COUNT_API_NAMESPACE)}/${encodeURIComponent(key)}`);
+    const j = await r.json(); return j.value ?? 0;
+  }catch(e){
+    return Number(localStorage.getItem('count:'+key) || 0);
+  }
+}
+async function incCount(key){
+  const onceKey = 'liked:'+key;
+  if(localStorage.getItem(onceKey)) return getCount(key);
+  localStorage.setItem(onceKey,'1');
+  if(!COUNT_API_NAMESPACE){
+    const v = Number(localStorage.getItem('count:'+key) || 0) + 1;
+    localStorage.setItem('count:'+key, String(v)); return v;
+  }
+  try{
+    const r = await fetch(`https://api.countapi.xyz/hit/${encodeURIComponent(COUNT_API_NAMESPACE)}/${encodeURIComponent(key)}`);
+    const j = await r.json(); return j.value ?? 0;
+  }catch(e){
+    const v = Number(localStorage.getItem('count:'+key) || 0) + 1;
+    localStorage.setItem('count:'+key, String(v)); return v;
+  }
+}
+
+(async function(){
+  if(TITLE) $('#title').textContent = decodeURIComponent(TITLE);
+  if(SUB) $('#sub').textContent = decodeURIComponent(SUB);
+
+  const listEl = $("#list"), emptyEl=$("#empty"), errEl=$("#error"), footEl=$("#foot"), dateLabel=$("#dateLabel");
+  try{
+    const res = await fetch(SHEET_CSV_URL, {cache:'no-store'});
+    if(!res.ok) throw new Error("Failed to fetch CSV");
+    const text = await res.text();
+    const rows = parseCSV(text).filter(r => r.length && r.join('').trim().length);
+    const headers = rows.shift().map(h=>h.trim().toLowerCase());
+    const idx = {
+      date: headers.indexOf('date'),
+      cinema: headers.indexOf('cinema'),
+      address: headers.indexOf('address'),
+      movie: headers.indexOf('movie'),
+      format: headers.indexOf('format'),
+      times: headers.indexOf('times'),
+      rating: headers.indexOf('rating'),
+      runtime: headers.indexOf('runtime_min'),
+      url: headers.indexOf('more_info_url')
+    };
+    if(idx.date < 0 || idx.movie < 0){ throw new Error("Missing required headers. Expect: date, cinema, address, movie, format, times, rating, runtime_min, more_info_url"); }
+
+    const data = rows.map(r => ({
+      date: (r[idx.date]||'').trim(),
+      cinema: r[idx.cinema]||'',
+      address: r[idx.address]||'',
+      movie: r[idx.movie]||'',
+      format: r[idx.format]||'',
+      times: (r[idx.times]||'').split(/;|,|\||\//).map(s=>s.trim()).filter(Boolean),
+      rating: r[idx.rating]||'',
+      runtime: r[idx.runtime]||'',
+      url: r[idx.url]||'https://www.cineplex.com/theatre/galaxy-cinemas-moose-jaw/'
+    }));
+
+    const byDate = {};
+    data.forEach(x => { if(!byDate[x.date]) byDate[x.date]=[]; byDate[x.date].push(x); });
+    const allDates = Object.keys(byDate).filter(Boolean).sort();
+
+    // Decide which date to render
+    const today = todayISO();
+    let targetDate = FORCE_DATE || today;
+    let rowsForDate = byDate[targetDate] || [];
+
+    function findNearest(after){
+      const sorted = allDates.slice().sort();
+      if(after){
+        for(const d of sorted){ if(d >= after) return d; }
+      }
+      return sorted[sorted.length-1]; // last available
+    }
+
+    if((MODE === 'auto' || MODE === 'nearest') && (!rowsForDate || rowsForDate.length === 0)){
+      const nearest = findNearest(today);
+      targetDate = nearest || targetDate;
+      rowsForDate = byDate[targetDate] || [];
+    }
+    if(MODE === 'all'){
+      const upcoming = allDates.filter(d => d >= today).slice(0,7);
+      rowsForDate = upcoming.flatMap(d => byDate[d].map(x => ({...x, _label:d})));
+    }
+
+    if(!rowsForDate || rowsForDate.length === 0){
+      emptyEl.hidden = false;
+      dateLabel.textContent = `No rows for today (${today}). Available dates in sheet: ${allDates.join(', ') || 'none'}.`;
+      return;
+    }
+
+    const tmpl = document.getElementById('card');
+    listEl.innerHTML = '';
+
+    (rowsForDate || []).forEach(r => {
+      const el = tmpl.content.firstElementChild.cloneNode(true);
+      const keyDate = r._label || r.date;
+      el.querySelector('[data-badge]').textContent = new Date(keyDate+'T12:00:00').toLocaleDateString(undefined,{weekday:'short', month:'short', day:'numeric'});
+      el.querySelector('[data-title]').textContent = r.movie;
+      el.querySelector('[data-format]').textContent = r.format || '2D';
+      el.querySelector('[data-rating]').textContent = r.rating ? `Rated ${r.rating}` : '';
+      el.querySelector('[data-runtime]').textContent = r.runtime ? `${r.runtime} min` : '';
+      const timesBox = el.querySelector('[data-times]');
+      (r.times||[]).forEach(t => { const chip = document.createElement('span'); chip.className='mj-chip'; chip.textContent=t; timesBox.appendChild(chip); });
+      const link = el.querySelector('[data-link]'); link.href = r.url; link.textContent = 'Get tickets';
+
+      const countEl = el.querySelector('[data-count]');
+      const likeBtn = el.querySelector('[data-like]');
+      const key = `${keyDate}|${r.movie}`;
+      getCount(toSlug(key)).then(v => countEl.textContent = v);
+      likeBtn.addEventListener('click', async () => {
+        likeBtn.disabled = true;
+        const v = await incCount(toSlug(key));
+        countEl.textContent = v;
+        setTimeout(()=>{ likeBtn.disabled=false; }, 800);
+      });
+
+      listEl.appendChild(el);
+    });
+
+    document.getElementById('dateLabel').textContent = (MODE==='all')
+      ? `Showing upcoming listings • Sheet dates: ${allDates.join(', ')}`
+      : `Showing ${fmtDateLabel(targetDate)} • Sheet dates: ${allDates.join(', ')}`;
+
+    footEl.textContent = `Source: Google Sheet • Tip: add tomorrow’s rows now to pre-schedule.`;
+  }catch(err){
+    const errEl = document.getElementById('error');
+    errEl.hidden = false; errEl.textContent = 'Error: '+err.message;
+  }
+})();
+</script>
+</body>
+</html>
